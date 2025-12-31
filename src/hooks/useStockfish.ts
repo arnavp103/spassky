@@ -184,12 +184,12 @@ export function useStockfish(fen: string, enabled: boolean = true) {
   const fenRef = useRef(fen);
   const enabledRef = useRef(enabled);
 
-  // Update refs on render
-  fenRef.current = fen;
-  enabledRef.current = enabled;
-
   // Single effect to manage Stockfish lifecycle and analysis
   useEffect(() => {
+    // Update refs at start of effect
+    fenRef.current = fen;
+    enabledRef.current = enabled;
+
     if (!enabled || typeof window === "undefined") return;
 
     // Initialize Stockfish

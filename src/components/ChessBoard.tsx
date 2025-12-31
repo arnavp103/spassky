@@ -91,6 +91,9 @@ export function ChessBoard() {
   }, [showEval]);
 
   // Keyboard navigation
+  // Note: Zustand store functions (goBack, goForward, etc.) are guaranteed to be stable
+  // and don't change between renders, so we don't need them in dependencies.
+  // This is a documented Zustand feature.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't capture if user is typing in an input/textarea
@@ -121,7 +124,7 @@ export function ChessBoard() {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Store functions are stable, no need to include them
+  }, []); // Zustand store functions are stable - no dependencies needed
 
   // Calculate legal moves for selected piece
   const legalMoves = useMemo(() => {

@@ -83,22 +83,25 @@ export function ChatWindow() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Memoize stockfish eval to prevent transport recreation
-  // We stringify pv array to detect content changes without deep comparison
-  const pvString = stockfishEval.pv?.join(',') || '';
   const stableStockfishEval = useMemo(
-    () => ({
-      score: stockfishEval.score,
-      mate: stockfishEval.mate,
-      bestMove: stockfishEval.bestMove,
-      depth: stockfishEval.depth,
-      pv: stockfishEval.pv,
-    }),
+    () => {
+      // Stringify pv array inside useMemo to avoid doing it on every render
+      const pvString = stockfishEval.pv?.join(',') || '';
+      return {
+        score: stockfishEval.score,
+        mate: stockfishEval.mate,
+        bestMove: stockfishEval.bestMove,
+        depth: stockfishEval.depth,
+        pv: stockfishEval.pv,
+        _pvString: pvString, // Track for dependency
+      };
+    },
     [
       stockfishEval.score,
       stockfishEval.mate,
       stockfishEval.bestMove,
       stockfishEval.depth,
-      pvString, // Use stringified version to track pv changes efficiently
+      stockfishEval.pv, // Include pv directly - React compares by reference
     ]
   );
 
@@ -309,19 +312,22 @@ export function ChatWindow() {
       return;
     }
 
+    // Extract values to avoid optional chaining in dependencies
+    const { expectedMove, answerExplanation } = exerciseMode;
+
     const handleExerciseMove = async (moveSan: string, isCorrect: boolean) => {
       clearExerciseMode();
 
       // Send hidden message to AI with the result
       const hiddenMessage = isCorrect
-        ? `[EXERCISE_RESPONSE] User played: ${moveSan} (CORRECT - this was the expected move: ${exerciseMode.expectedMove})`
-        : `[EXERCISE_RESPONSE] User played: ${moveSan} (INCORRECT - expected: ${exerciseMode.expectedMove}). Explanation of correct move: ${exerciseMode.answerExplanation}`;
+        ? `[EXERCISE_RESPONSE] User played: ${moveSan} (CORRECT - this was the expected move: ${expectedMove})`
+        : `[EXERCISE_RESPONSE] User played: ${moveSan} (INCORRECT - expected: ${expectedMove}). Explanation of correct move: ${answerExplanation}`;
 
       await sendMessage({ text: hiddenMessage });
     };
 
     setOnExerciseMove(handleExerciseMove);
-  }, [exerciseMode?.active, exerciseMode?.expectedMove, exerciseMode?.answerExplanation, clearExerciseMode, setOnExerciseMove, sendMessage]);
+  }, [exerciseMode, clearExerciseMode, setOnExerciseMove, sendMessage]);
 
   const isLoading = status === "streaming" || status === "submitted";
 
@@ -355,6 +361,9 @@ export function ChatWindow() {
   }, [currentSection, queuedToolCalls, executeToolCall]);
 
   // Execute tool calls when AI finishes and we have queued calls
+  // Note: We include the full queuedToolCalls array because we access individual elements.
+  // This is intentional - the array reference changes when new tools are added, which is
+  // exactly when we want this effect to re-run.
   useEffect(() => {
     if (status !== "ready" || queuedToolCalls.length === 0 || currentSection !== 0) {
       return;
@@ -374,7 +383,7 @@ export function ChatWindow() {
     }
     setCurrentSection(queuedToolCalls.length);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, queuedToolCalls, currentSection]); // Need full array since we access elements
+  }, [status, queuedToolCalls, currentSection]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
