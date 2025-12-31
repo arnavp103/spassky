@@ -83,6 +83,8 @@ export function ChatWindow() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Memoize stockfish eval to prevent transport recreation
+  // We stringify pv array to detect content changes without deep comparison
+  const pvString = stockfishEval.pv?.join(',') || '';
   const stableStockfishEval = useMemo(
     () => ({
       score: stockfishEval.score,
@@ -96,10 +98,7 @@ export function ChatWindow() {
       stockfishEval.mate,
       stockfishEval.bestMove,
       stockfishEval.depth,
-      // Note: pv is an array, but we only care about changes to its content
-      // Using JSON.stringify as a quick way to compare array contents
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      JSON.stringify(stockfishEval.pv),
+      pvString, // Use stringified version to track pv changes efficiently
     ]
   );
 
@@ -326,10 +325,11 @@ export function ChatWindow() {
 
   const isLoading = status === "streaming" || status === "submitted";
 
-  // Auto-scroll to bottom when messages change
+  // Auto-scroll to bottom when new messages are added
+  // Note: We only depend on length to avoid scrolling during message updates (e.g., streaming)
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.length]); // Only depend on length to avoid scrolling on every message update
+  }, [messages.length]);
 
   // Check if there are more tool calls to execute
   const hasMoreToolCalls = currentSection < queuedToolCalls.length;
@@ -373,7 +373,8 @@ export function ChatWindow() {
       i++;
     }
     setCurrentSection(queuedToolCalls.length);
-  }, [status, queuedToolCalls.length, currentSection]); // Only depend on length and status
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, queuedToolCalls, currentSection]); // Need full array since we access elements
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();

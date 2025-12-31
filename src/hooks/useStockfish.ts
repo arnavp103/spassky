@@ -188,15 +188,15 @@ export function useStockfish(fen: string, enabled: boolean = true) {
   fenRef.current = fen;
   enabledRef.current = enabled;
 
-  // Determine if it's black's turn from FEN (second field after position)
-  const isBlackTurn = useMemo(() => fen.split(" ")[1] === "b", [fen]);
-
   // Single effect to manage Stockfish lifecycle and analysis
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return;
 
     // Initialize Stockfish
     stockfish.init();
+
+    // Determine if it's black's turn from current FEN
+    const isBlackTurn = fen.split(" ")[1] === "b";
 
     // Message handler
     const handleMessage = (message: string) => {
@@ -256,7 +256,7 @@ export function useStockfish(fen: string, enabled: boolean = true) {
       clearTimeout(timer);
       stockfish.removeListener(handleMessage);
     };
-  }, [fen, enabled, isBlackTurn]);
+  }, [fen, enabled]); // isBlackTurn is derived from fen, no need to include it
 
   const analyze = useCallback((depth: number = 22) => {
     setEvaluation((prev) => ({ ...prev, isAnalyzing: true }));
