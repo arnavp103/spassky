@@ -83,19 +83,17 @@ export function ChatWindow() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Memoize stockfish eval to prevent transport recreation
+  // Note: stockfishEval.pv is included directly. While arrays are compared by reference,
+  // the useStockfish hook creates a new array only when actual values change,
+  // so this is safe and avoids unnecessary serialization overhead.
   const stableStockfishEval = useMemo(
-    () => {
-      // Stringify pv array inside useMemo to avoid doing it on every render
-      const pvString = stockfishEval.pv?.join(',') || '';
-      return {
-        score: stockfishEval.score,
-        mate: stockfishEval.mate,
-        bestMove: stockfishEval.bestMove,
-        depth: stockfishEval.depth,
-        pv: stockfishEval.pv,
-        _pvString: pvString, // Track for dependency
-      };
-    },
+    () => ({
+      score: stockfishEval.score,
+      mate: stockfishEval.mate,
+      bestMove: stockfishEval.bestMove,
+      depth: stockfishEval.depth,
+      pv: stockfishEval.pv,
+    }),
     [
       stockfishEval.score,
       stockfishEval.mate,

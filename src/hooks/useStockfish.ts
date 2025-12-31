@@ -181,15 +181,9 @@ const stockfish = new StockfishManager();
 
 export function useStockfish(fen: string, enabled: boolean = true) {
   const [evaluation, setEvaluation] = useState<StockfishEvaluation>(initialEval);
-  const fenRef = useRef(fen);
-  const enabledRef = useRef(enabled);
 
   // Single effect to manage Stockfish lifecycle and analysis
   useEffect(() => {
-    // Update refs at start of effect
-    fenRef.current = fen;
-    enabledRef.current = enabled;
-
     if (!enabled || typeof window === "undefined") return;
 
     // Initialize Stockfish
@@ -245,10 +239,10 @@ export function useStockfish(fen: string, enabled: boolean = true) {
 
     stockfish.addListener(handleMessage);
 
-    // Debounced analysis trigger
+    // Debounced analysis trigger - use fen directly from closure
     const timer = setTimeout(() => {
-      if (enabledRef.current) {
-        stockfish.analyze(fenRef.current);
+      if (enabled) { // Use enabled from closure instead of ref
+        stockfish.analyze(fen);
       }
     }, 150);
 
@@ -260,8 +254,8 @@ export function useStockfish(fen: string, enabled: boolean = true) {
 
   const analyze = useCallback((depth: number = 22) => {
     setEvaluation((prev) => ({ ...prev, isAnalyzing: true }));
-    stockfish.analyze(fenRef.current);
-  }, []);
+    stockfish.analyze(fen);
+  }, [fen]);
 
   const stop = useCallback(() => {
     stockfish.stop();
