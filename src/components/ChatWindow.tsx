@@ -422,29 +422,29 @@ export function ChatWindow() {
     executeNextSection();
   };
 
-  const handleLoadFamousGame = async (game: FamousGame) => {
+  const handleLoadFamousGame = useCallback(async (game: FamousGame) => {
     loadPgn(game.pgn);
     setLoadedPgn(game.pgn);
     await sendMessage({
       text: `I'd like to study the "${game.name}" - ${game.players} (${game.year}). ${game.description}. Please tell me about the historical context of this game, explain the opening, discuss the middlegame strategies, and walk me through the key moments and brilliant moves.`,
     });
-  };
+  }, [loadPgn, sendMessage]);
 
-  const handleLoadOpening = async (opening: OpeningStudy) => {
+  const handleLoadOpening = useCallback(async (opening: OpeningStudy) => {
     loadPgn(opening.pgn);
     setLoadedPgn(opening.pgn);
     await sendMessage({
       text: `I'd like to study the ${opening.name} opening (${opening.eco}). ${opening.description}. Please teach me this opening interactively - walk me through the main ideas and key variations, and let me play moves to explore the theory branches.`,
     });
-  };
+  }, [loadPgn, sendMessage]);
 
-  const handleLoadEndgame = async (endgame: EndgameStudy) => {
+  const handleLoadEndgame = useCallback(async (endgame: EndgameStudy) => {
     loadFen(endgame.fen);
     setLoadedPgn(""); // Clear any loaded PGN
     await sendMessage({
       text: `I'd like to study the ${endgame.name}. ${endgame.description}. Objective: ${endgame.objective}. Please teach me this endgame technique step by step.`,
     });
-  };
+  }, [loadFen, sendMessage]);
 
   // Extract text content from message parts
   const getMessageText = (message: UIMessage): string => {
