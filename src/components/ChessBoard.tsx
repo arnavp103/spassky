@@ -9,6 +9,11 @@ import { GameImporter } from "./GameImporter";
 import { EvalBar } from "./EvalBar";
 import { useStockfish } from "@/hooks/useStockfish";
 
+// Constants
+const RIGHT_CLICK_SQUARE_COLOR = "rgba(255, 170, 0, 0.4)";
+const CUSTOM_DARK_SQUARE_COLOR = "#779556";
+const CUSTOM_LIGHT_SQUARE_COLOR = "#ebecd0";
+
 export function ChessBoard() {
   const {
     currentFen,
@@ -225,13 +230,12 @@ export function ChessBoard() {
 
   const onSquareRightClick = useCallback(
     ({ square }: { piece: { pieceType: string } | null; square: string }) => {
-      const color = "rgba(255, 170, 0, 0.4)";
       setRightClickedSquares((prev) => {
         const newSquares = { ...prev };
         if (newSquares[square]) {
           delete newSquares[square];
         } else {
-          newSquares[square] = { backgroundColor: color };
+          newSquares[square] = { backgroundColor: RIGHT_CLICK_SQUARE_COLOR };
         }
         return newSquares;
       });
@@ -315,9 +319,6 @@ export function ChessBoard() {
   }, [arrows]);
 
   // Custom piece theme for a more editorial look
-  const customDarkSquareColor = "#779556";
-  const customLightSquareColor = "#ebecd0";
-
   return (
     <div className="flex h-full flex-col">
       {/* Exercise mode indicator */}
@@ -354,7 +355,7 @@ export function ChessBoard() {
             height: boardSize,
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
             flexShrink: 0,
-            backgroundColor: '#779556', // Match dark square to hide any sub-pixel gaps
+            backgroundColor: CUSTOM_DARK_SQUARE_COLOR, // Match dark square to hide any sub-pixel gaps
           }}
         >
           <Chessboard
@@ -363,8 +364,8 @@ export function ChessBoard() {
               onPieceDrop: onDrop,
               boardOrientation: orientation,
               arrows: customArrows,
-              darkSquareStyle: { backgroundColor: customDarkSquareColor },
-              lightSquareStyle: { backgroundColor: customLightSquareColor },
+              darkSquareStyle: { backgroundColor: CUSTOM_DARK_SQUARE_COLOR },
+              lightSquareStyle: { backgroundColor: CUSTOM_LIGHT_SQUARE_COLOR },
               onSquareClick: onSquareClick,
               onSquareRightClick: onSquareRightClick,
               squareRenderer: squareRenderer,

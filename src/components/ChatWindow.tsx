@@ -30,6 +30,21 @@ interface ResponseSection {
   moveColor?: "white" | "black";
 }
 
+// Constants for arrow and highlight colors
+const ARROW_COLOR_MAP: Record<string, string> = {
+  green: "rgba(0, 200, 100, 0.8)",
+  red: "rgba(255, 80, 80, 0.8)",
+  yellow: "rgba(255, 200, 0, 0.8)",
+  blue: "rgba(80, 150, 255, 0.8)",
+};
+
+const HIGHLIGHT_COLOR_MAP: Record<string, string> = {
+  green: "rgba(0, 200, 100, 0.4)",
+  red: "rgba(255, 80, 80, 0.4)",
+  yellow: "rgba(255, 200, 0, 0.4)",
+  blue: "rgba(80, 150, 255, 0.4)",
+};
+
 export function ChatWindow() {
   const {
     loadPgn,
@@ -104,22 +119,12 @@ export function ChatWindow() {
   );
 
   // Execute a single tool call
+  // Execute a single tool call - use ref for stockfish to avoid recreation
+  const stockfishEvalRef = useRef(stockfishEval);
+  stockfishEvalRef.current = stockfishEval;
+
   const executeToolCall = useCallback(
     (toolCall: QueuedToolCall, animate: boolean = true) => {
-      const colorMap: Record<string, string> = {
-        green: "rgba(0, 200, 100, 0.8)",
-        red: "rgba(255, 80, 80, 0.8)",
-        yellow: "rgba(255, 200, 0, 0.8)",
-        blue: "rgba(80, 150, 255, 0.8)",
-      };
-
-      const highlightColorMap: Record<string, string> = {
-        green: "rgba(0, 200, 100, 0.4)",
-        red: "rgba(255, 80, 80, 0.4)",
-        yellow: "rgba(255, 200, 0, 0.4)",
-        blue: "rgba(80, 150, 255, 0.4)",
-      };
-
       console.log("[ChatWindow] Executing tool:", toolCall.toolName, toolCall.input);
 
       switch (toolCall.toolName) {
@@ -153,7 +158,7 @@ export function ChatWindow() {
             arrows.map((a) => ({
               from: a.from as Square,
               to: a.to as Square,
-              color: colorMap[a.color || "green"],
+              color: ARROW_COLOR_MAP[a.color || "green"],
             }))
           );
           return `Drew ${arrows.length} arrows`;
@@ -167,7 +172,7 @@ export function ChatWindow() {
           setHighlights(
             squares.map((sq) => ({
               square: sq as Square,
-              color: highlightColorMap[color || "yellow"],
+              color: HIGHLIGHT_COLOR_MAP[color || "yellow"],
             }))
           );
           return `Highlighted ${squares.length} squares`;
@@ -208,17 +213,18 @@ export function ChatWindow() {
         }
 
         case "getAnalysis": {
+          const currentEval = stockfishEvalRef.current;
           const analysisResult = {
             currentFen,
-            score: stockfishEval.score,
-            mate: stockfishEval.mate,
-            depth: stockfishEval.depth,
-            bestMove: stockfishEval.bestMove,
-            pv: stockfishEval.pv,
+            score: currentEval.score,
+            mate: currentEval.mate,
+            depth: currentEval.depth,
+            bestMove: currentEval.bestMove,
+            pv: currentEval.pv,
             evaluation:
-              stockfishEval.mate !== null
-                ? `Mate in ${stockfishEval.mate}`
-                : `${((stockfishEval.score || 0) / 100).toFixed(1)} pawns (${(stockfishEval.score || 0) > 0 ? "White" : "Black"} advantage)`,
+              currentEval.mate !== null
+                ? `Mate in ${currentEval.mate}`
+                : `${((currentEval.score || 0) / 100).toFixed(1)} pawns (${(currentEval.score || 0) > 0 ? "White" : "Black"} advantage)`,
           };
           return JSON.stringify(analysisResult);
         }
@@ -228,14 +234,15 @@ export function ChatWindow() {
             thought: string;
             analyzeMoves?: string[];
           };
+          const currentEval = stockfishEvalRef.current;
           addScratchpadEntry({
             thought,
             analyzeMoves,
             analysisResult: {
-              score: stockfishEval.score,
-              mate: stockfishEval.mate,
-              bestMove: stockfishEval.bestMove,
-              pv: stockfishEval.pv || [],
+              score: currentEval.score,
+              mate: currentEval.mate,
+              bestMove: currentEval.bestMove,
+              pv: currentEval.pv || [],
             },
           });
           return "Thought recorded";
@@ -260,7 +267,6 @@ export function ChatWindow() {
       setExerciseMode,
       addScratchpadEntry,
       currentFen,
-      stockfishEval,
     ]
   );
 
