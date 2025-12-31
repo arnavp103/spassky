@@ -30,6 +30,21 @@ interface ResponseSection {
   moveColor?: "white" | "black";
 }
 
+// Constants for arrow and highlight colors
+const ARROW_COLOR_MAP: Record<string, string> = {
+  green: "rgba(0, 200, 100, 0.8)",
+  red: "rgba(255, 80, 80, 0.8)",
+  yellow: "rgba(255, 200, 0, 0.8)",
+  blue: "rgba(80, 150, 255, 0.8)",
+};
+
+const HIGHLIGHT_COLOR_MAP: Record<string, string> = {
+  green: "rgba(0, 200, 100, 0.4)",
+  red: "rgba(255, 80, 80, 0.4)",
+  yellow: "rgba(255, 200, 0, 0.4)",
+  blue: "rgba(80, 150, 255, 0.4)",
+};
+
 export function ChatWindow() {
   const {
     loadPgn,
@@ -67,6 +82,27 @@ export function ChatWindow() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Memoize stockfish eval to prevent transport recreation
+  // Note: stockfishEval.pv is included directly. While arrays are compared by reference,
+  // the useStockfish hook creates a new array only when actual values change,
+  // so this is safe and avoids unnecessary serialization overhead.
+  const stableStockfishEval = useMemo(
+    () => ({
+      score: stockfishEval.score,
+      mate: stockfishEval.mate,
+      bestMove: stockfishEval.bestMove,
+      depth: stockfishEval.depth,
+      pv: stockfishEval.pv,
+    }),
+    [
+      stockfishEval.score,
+      stockfishEval.mate,
+      stockfishEval.bestMove,
+      stockfishEval.depth,
+      stockfishEval.pv, // Include pv directly - React compares by reference
+    ]
+  );
+
   // Create transport with custom body data
   const transport = useMemo(
     () =>
@@ -76,35 +112,19 @@ export function ChatWindow() {
           currentFen,
           gameInfo,
           pgn: loadedPgn,
-          stockfishEval: {
-            score: stockfishEval.score,
-            mate: stockfishEval.mate,
-            bestMove: stockfishEval.bestMove,
-            depth: stockfishEval.depth,
-            pv: stockfishEval.pv,
-          },
+          stockfishEval: stableStockfishEval,
         },
       }),
-    [currentFen, gameInfo, loadedPgn, stockfishEval]
+    [currentFen, gameInfo, loadedPgn, stableStockfishEval]
   );
 
   // Execute a single tool call
+  // Execute a single tool call - use ref for stockfish to avoid recreation
+  const stockfishEvalRef = useRef(stockfishEval);
+  stockfishEvalRef.current = stockfishEval;
+
   const executeToolCall = useCallback(
     (toolCall: QueuedToolCall, animate: boolean = true) => {
-      const colorMap: Record<string, string> = {
-        green: "rgba(0, 200, 100, 0.8)",
-        red: "rgba(255, 80, 80, 0.8)",
-        yellow: "rgba(255, 200, 0, 0.8)",
-        blue: "rgba(80, 150, 255, 0.8)",
-      };
-
-      const highlightColorMap: Record<string, string> = {
-        green: "rgba(0, 200, 100, 0.4)",
-        red: "rgba(255, 80, 80, 0.4)",
-        yellow: "rgba(255, 200, 0, 0.4)",
-        blue: "rgba(80, 150, 255, 0.4)",
-      };
-
       console.log("[ChatWindow] Executing tool:", toolCall.toolName, toolCall.input);
 
       switch (toolCall.toolName) {
@@ -138,7 +158,7 @@ export function ChatWindow() {
             arrows.map((a) => ({
               from: a.from as Square,
               to: a.to as Square,
-              color: colorMap[a.color || "green"],
+              color: ARROW_COLOR_MAP[a.color || "green"],
             }))
           );
           return `Drew ${arrows.length} arrows`;
@@ -152,7 +172,7 @@ export function ChatWindow() {
           setHighlights(
             squares.map((sq) => ({
               square: sq as Square,
-              color: highlightColorMap[color || "yellow"],
+              color: HIGHLIGHT_COLOR_MAP[color || "yellow"],
             }))
           );
           return `Highlighted ${squares.length} squares`;
@@ -193,17 +213,18 @@ export function ChatWindow() {
         }
 
         case "getAnalysis": {
+          const currentEval = stockfishEvalRef.current;
           const analysisResult = {
             currentFen,
-            score: stockfishEval.score,
-            mate: stockfishEval.mate,
-            depth: stockfishEval.depth,
-            bestMove: stockfishEval.bestMove,
-            pv: stockfishEval.pv,
+            score: currentEval.score,
+            mate: currentEval.mate,
+            depth: currentEval.depth,
+            bestMove: currentEval.bestMove,
+            pv: currentEval.pv,
             evaluation:
-              stockfishEval.mate !== null
-                ? `Mate in ${stockfishEval.mate}`
-                : `${((stockfishEval.score || 0) / 100).toFixed(1)} pawns (${(stockfishEval.score || 0) > 0 ? "White" : "Black"} advantage)`,
+              currentEval.mate !== null
+                ? `Mate in ${currentEval.mate}`
+                : `${((currentEval.score || 0) / 100).toFixed(1)} pawns (${(currentEval.score || 0) > 0 ? "White" : "Black"} advantage)`,
           };
           return JSON.stringify(analysisResult);
         }
@@ -213,14 +234,15 @@ export function ChatWindow() {
             thought: string;
             analyzeMoves?: string[];
           };
+          const currentEval = stockfishEvalRef.current;
           addScratchpadEntry({
             thought,
             analyzeMoves,
             analysisResult: {
-              score: stockfishEval.score,
-              mate: stockfishEval.mate,
-              bestMove: stockfishEval.bestMove,
-              pv: stockfishEval.pv || [],
+              score: currentEval.score,
+              mate: currentEval.mate,
+              bestMove: currentEval.bestMove,
+              pv: currentEval.pv || [],
             },
           });
           return "Thought recorded";
@@ -245,7 +267,6 @@ export function ChatWindow() {
       setExerciseMode,
       addScratchpadEntry,
       currentFen,
-      stockfishEval,
     ]
   );
 
@@ -282,35 +303,37 @@ export function ChatWindow() {
     },
   });
 
-  // Set up exercise move callback
+  // Set up exercise move callback when exercise mode becomes active
   useEffect(() => {
-    if (exerciseMode?.active) {
-      const handleExerciseMove = async (moveSan: string, isCorrect: boolean) => {
-        clearExerciseMode();
-
-        // Send hidden message to AI with the result
-        const hiddenMessage = isCorrect
-          ? `[EXERCISE_RESPONSE] User played: ${moveSan} (CORRECT - this was the expected move: ${exerciseMode.expectedMove})`
-          : `[EXERCISE_RESPONSE] User played: ${moveSan} (INCORRECT - expected: ${exerciseMode.expectedMove}). Explanation of correct move: ${exerciseMode.answerExplanation}`;
-
-        await sendMessage({ text: hiddenMessage });
-      };
-
-      setOnExerciseMove(handleExerciseMove);
-
-      return () => setOnExerciseMove(null);
+    if (!exerciseMode?.active) {
+      setOnExerciseMove(null);
+      return;
     }
+
+    // Extract values to avoid optional chaining in dependencies
+    const { expectedMove, answerExplanation } = exerciseMode;
+
+    const handleExerciseMove = async (moveSan: string, isCorrect: boolean) => {
+      clearExerciseMode();
+
+      // Send hidden message to AI with the result
+      const hiddenMessage = isCorrect
+        ? `[EXERCISE_RESPONSE] User played: ${moveSan} (CORRECT - this was the expected move: ${expectedMove})`
+        : `[EXERCISE_RESPONSE] User played: ${moveSan} (INCORRECT - expected: ${expectedMove}). Explanation of correct move: ${answerExplanation}`;
+
+      await sendMessage({ text: hiddenMessage });
+    };
+
+    setOnExerciseMove(handleExerciseMove);
   }, [exerciseMode, clearExerciseMode, setOnExerciseMove, sendMessage]);
 
   const isLoading = status === "streaming" || status === "submitted";
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
-
+  // Auto-scroll to bottom when new messages are added
+  // Note: We only depend on length to avoid scrolling during message updates (e.g., streaming)
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length]);
 
   // Check if there are more tool calls to execute
   const hasMoreToolCalls = currentSection < queuedToolCalls.length;
@@ -335,24 +358,30 @@ export function ChatWindow() {
     setCurrentSection(queuedToolCalls.length);
   }, [currentSection, queuedToolCalls, executeToolCall]);
 
-  // When status becomes ready (AI finished), execute first section
+  // Execute tool calls when AI finishes and we have queued calls
+  // Note: We include the full queuedToolCalls array because we access individual elements.
+  // This is intentional - the array reference changes when new tools are added, which is
+  // exactly when we want this effect to re-run.
   useEffect(() => {
-    if (status === "ready" && queuedToolCalls.length > 0 && currentSection === 0) {
-      // Execute first section immediately (no animation for initial setup)
-      let i = 0;
-      while (i < queuedToolCalls.length) {
-        const toolCall = queuedToolCalls[i];
-        executeToolCall(toolCall, false); // animate = false for initial reveal
-
-        if (toolCall.toolName === "jumpToMove") {
-          setCurrentSection(i + 1);
-          return;
-        }
-        i++;
-      }
-      setCurrentSection(queuedToolCalls.length);
+    if (status !== "ready" || queuedToolCalls.length === 0 || currentSection !== 0) {
+      return;
     }
-  }, [status, queuedToolCalls, currentSection, executeToolCall]);
+
+    // Execute first section immediately (no animation for initial setup)
+    let i = 0;
+    while (i < queuedToolCalls.length) {
+      const toolCall = queuedToolCalls[i];
+      executeToolCall(toolCall, false); // animate = false for initial reveal
+
+      if (toolCall.toolName === "jumpToMove") {
+        setCurrentSection(i + 1);
+        return;
+      }
+      i++;
+    }
+    setCurrentSection(queuedToolCalls.length);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, queuedToolCalls, currentSection]);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -401,29 +430,29 @@ export function ChatWindow() {
     executeNextSection();
   };
 
-  const handleLoadFamousGame = async (game: FamousGame) => {
+  const handleLoadFamousGame = useCallback(async (game: FamousGame) => {
     loadPgn(game.pgn);
     setLoadedPgn(game.pgn);
     await sendMessage({
       text: `I'd like to study the "${game.name}" - ${game.players} (${game.year}). ${game.description}. Please tell me about the historical context of this game, explain the opening, discuss the middlegame strategies, and walk me through the key moments and brilliant moves.`,
     });
-  };
+  }, [loadPgn, sendMessage]);
 
-  const handleLoadOpening = async (opening: OpeningStudy) => {
+  const handleLoadOpening = useCallback(async (opening: OpeningStudy) => {
     loadPgn(opening.pgn);
     setLoadedPgn(opening.pgn);
     await sendMessage({
       text: `I'd like to study the ${opening.name} opening (${opening.eco}). ${opening.description}. Please teach me this opening interactively - walk me through the main ideas and key variations, and let me play moves to explore the theory branches.`,
     });
-  };
+  }, [loadPgn, sendMessage]);
 
-  const handleLoadEndgame = async (endgame: EndgameStudy) => {
+  const handleLoadEndgame = useCallback(async (endgame: EndgameStudy) => {
     loadFen(endgame.fen);
     setLoadedPgn(""); // Clear any loaded PGN
     await sendMessage({
       text: `I'd like to study the ${endgame.name}. ${endgame.description}. Objective: ${endgame.objective}. Please teach me this endgame technique step by step.`,
     });
-  };
+  }, [loadFen, sendMessage]);
 
   // Extract text content from message parts
   const getMessageText = (message: UIMessage): string => {

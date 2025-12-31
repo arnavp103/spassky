@@ -9,6 +9,11 @@ import { GameImporter } from "./GameImporter";
 import { EvalBar } from "./EvalBar";
 import { useStockfish } from "@/hooks/useStockfish";
 
+// Constants
+const RIGHT_CLICK_SQUARE_COLOR = "rgba(255, 170, 0, 0.4)";
+const CUSTOM_DARK_SQUARE_COLOR = "#779556";
+const CUSTOM_LIGHT_SQUARE_COLOR = "#ebecd0";
+
 export function ChessBoard() {
   const {
     currentFen,
@@ -39,10 +44,10 @@ export function ChessBoard() {
 
   // Calculate board size rounded to multiple of 8 to prevent sub-pixel gaps
   useEffect(() => {
-    const calculateBoardSize = () => {
-      if (!containerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
 
-      const container = containerRef.current;
+    const calculateBoardSize = () => {
       const rect = container.getBoundingClientRect();
       const containerWidth = rect.width;
       const containerHeight = rect.height;
@@ -77,9 +82,7 @@ export function ChessBoard() {
       requestAnimationFrame(calculateBoardSize);
     });
 
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
-    }
+    resizeObserver.observe(container);
 
     return () => {
       clearTimeout(timeoutId);
@@ -88,6 +91,9 @@ export function ChessBoard() {
   }, [showEval]);
 
   // Keyboard navigation
+  // Note: Zustand store functions (goBack, goForward, etc.) are guaranteed to be stable
+  // and don't change between renders, so we don't need them in dependencies.
+  // This is a documented Zustand feature.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't capture if user is typing in an input/textarea
@@ -117,7 +123,8 @@ export function ChessBoard() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [goBack, goForward, goToStart, goToEnd]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Zustand store functions are stable - no dependencies needed
 
   // Calculate legal moves for selected piece
   const legalMoves = useMemo(() => {
@@ -226,13 +233,12 @@ export function ChessBoard() {
 
   const onSquareRightClick = useCallback(
     ({ square }: { piece: { pieceType: string } | null; square: string }) => {
-      const color = "rgba(255, 170, 0, 0.4)";
       setRightClickedSquares((prev) => {
         const newSquares = { ...prev };
         if (newSquares[square]) {
           delete newSquares[square];
         } else {
-          newSquares[square] = { backgroundColor: color };
+          newSquares[square] = { backgroundColor: RIGHT_CLICK_SQUARE_COLOR };
         }
         return newSquares;
       });
@@ -316,9 +322,6 @@ export function ChessBoard() {
   }, [arrows]);
 
   // Custom piece theme for a more editorial look
-  const customDarkSquareColor = "#779556";
-  const customLightSquareColor = "#ebecd0";
-
   return (
     <div className="flex h-full flex-col">
       {/* Exercise mode indicator */}
@@ -355,7 +358,7 @@ export function ChessBoard() {
             height: boardSize,
             boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
             flexShrink: 0,
-            backgroundColor: '#779556', // Match dark square to hide any sub-pixel gaps
+            backgroundColor: CUSTOM_DARK_SQUARE_COLOR, // Match dark square to hide any sub-pixel gaps
           }}
         >
           <Chessboard
@@ -364,8 +367,8 @@ export function ChessBoard() {
               onPieceDrop: onDrop,
               boardOrientation: orientation,
               arrows: customArrows,
-              darkSquareStyle: { backgroundColor: customDarkSquareColor },
-              lightSquareStyle: { backgroundColor: customLightSquareColor },
+              darkSquareStyle: { backgroundColor: CUSTOM_DARK_SQUARE_COLOR },
+              lightSquareStyle: { backgroundColor: CUSTOM_LIGHT_SQUARE_COLOR },
               onSquareClick: onSquareClick,
               onSquareRightClick: onSquareRightClick,
               squareRenderer: squareRenderer,
