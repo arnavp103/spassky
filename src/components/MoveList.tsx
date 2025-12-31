@@ -14,9 +14,10 @@ interface MoveButtonProps {
 function MoveButton({ node, isCurrentNode, onClick, showMoveNumber = false }: MoveButtonProps) {
   const buttonRef = useRef<HTMLButtonElement>(null);
 
+  // Scroll into view when this becomes the current move
   useEffect(() => {
-    if (isCurrentNode && buttonRef.current) {
-      buttonRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (isCurrentNode) {
+      buttonRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
   }, [isCurrentNode]);
 

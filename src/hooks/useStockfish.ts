@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
 interface StockfishEvaluation {
   score: number | null; // In centipawns, null if mate
@@ -182,20 +182,24 @@ const stockfish = new StockfishManager();
 export function useStockfish(fen: string, enabled: boolean = true) {
   const [evaluation, setEvaluation] = useState<StockfishEvaluation>(initialEval);
   const fenRef = useRef(fen);
-  const isBlackTurnRef = useRef(false);
+  const enabledRef = useRef(enabled);
 
-  // Initialize on mount
+  // Update refs on render
+  fenRef.current = fen;
+  enabledRef.current = enabled;
+
+  // Determine if it's black's turn from FEN (second field after position)
+  const isBlackTurn = useMemo(() => fen.split(" ")[1] === "b", [fen]);
+
+  // Single effect to manage Stockfish lifecycle and analysis
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return;
+
+    // Initialize Stockfish
     stockfish.init();
-  }, [enabled]);
 
-  // Handle messages
-  useEffect(() => {
-    if (!enabled) return;
-
+    // Message handler
     const handleMessage = (message: string) => {
-      // Only process if this is for our current FEN analysis
       const depthMatch = message.match(/info.*depth (\d+)/);
       const scoreMatch = message.match(/score cp (-?\d+)/);
       const mateMatch = message.match(/score mate (-?\d+)/);
@@ -212,7 +216,7 @@ export function useStockfish(fen: string, enabled: boolean = true) {
 
           // Stockfish returns score from side-to-move's perspective
           // Flip the score if it's Black's turn so we always show from White's perspective
-          const flipScore = isBlackTurnRef.current ? -1 : 1;
+          const flipScore = isBlackTurn ? -1 : 1;
 
           if (scoreMatch) {
             newEval.score = parseInt(scoreMatch[1]) * flipScore;
@@ -240,28 +244,19 @@ export function useStockfish(fen: string, enabled: boolean = true) {
     };
 
     stockfish.addListener(handleMessage);
-    return () => stockfish.removeListener(handleMessage);
-  }, [enabled]);
 
-  // Analyze when FEN changes
-  useEffect(() => {
-    if (!enabled) return;
-
-    fenRef.current = fen;
-
-    // Determine if it's black's turn from FEN (second field after position)
-    const isBlackTurn = fen.split(" ")[1] === "b";
-    isBlackTurnRef.current = isBlackTurn;
-
-    // Small debounce to avoid rapid re-analysis
+    // Debounced analysis trigger
     const timer = setTimeout(() => {
-      if (fenRef.current === fen) {
-        stockfish.analyze(fen);
+      if (enabledRef.current) {
+        stockfish.analyze(fenRef.current);
       }
     }, 150);
 
-    return () => clearTimeout(timer);
-  }, [fen, enabled]);
+    return () => {
+      clearTimeout(timer);
+      stockfish.removeListener(handleMessage);
+    };
+  }, [fen, enabled, isBlackTurn]);
 
   const analyze = useCallback((depth: number = 22) => {
     setEvaluation((prev) => ({ ...prev, isAnalyzing: true }));

@@ -143,7 +143,7 @@ export function MarkdownContent({ content, onMoveClick }: MarkdownContentProps) 
         })}
       </>
     );
-  }, [content, onMoveClick]);
+  }, [content, onMoveClick]); // Simplified dependencies
 
   return (
     <div

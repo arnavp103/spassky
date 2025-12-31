@@ -39,10 +39,10 @@ export function ChessBoard() {
 
   // Calculate board size rounded to multiple of 8 to prevent sub-pixel gaps
   useEffect(() => {
-    const calculateBoardSize = () => {
-      if (!containerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
 
-      const container = containerRef.current;
+    const calculateBoardSize = () => {
       const rect = container.getBoundingClientRect();
       const containerWidth = rect.width;
       const containerHeight = rect.height;
@@ -77,9 +77,7 @@ export function ChessBoard() {
       requestAnimationFrame(calculateBoardSize);
     });
 
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
-    }
+    resizeObserver.observe(container);
 
     return () => {
       clearTimeout(timeoutId);
@@ -117,7 +115,8 @@ export function ChessBoard() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [goBack, goForward, goToStart, goToEnd]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Store functions are stable, no need to include them
 
   // Calculate legal moves for selected piece
   const legalMoves = useMemo(() => {

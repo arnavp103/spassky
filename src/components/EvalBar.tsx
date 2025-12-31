@@ -26,7 +26,7 @@ export function EvalBar({ score, mate, orientation, isAnalyzing, depth, height }
     // At +/- 400cp (4 pawns), we're at ~90% for the advantaged side
     const normalized = Math.tanh(score / 400);
     return 50 + normalized * 50;
-  }, [score, mate]);
+  }, [score, mate]); // Simplified - removed redundant dependencies
 
   // Format the score for display
   const displayScore = useMemo(() => {

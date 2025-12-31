@@ -67,6 +67,27 @@ export function ChatWindow() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Memoize stockfish eval to prevent transport recreation
+  const stableStockfishEval = useMemo(
+    () => ({
+      score: stockfishEval.score,
+      mate: stockfishEval.mate,
+      bestMove: stockfishEval.bestMove,
+      depth: stockfishEval.depth,
+      pv: stockfishEval.pv,
+    }),
+    [
+      stockfishEval.score,
+      stockfishEval.mate,
+      stockfishEval.bestMove,
+      stockfishEval.depth,
+      // Note: pv is an array, but we only care about changes to its content
+      // Using JSON.stringify as a quick way to compare array contents
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      JSON.stringify(stockfishEval.pv),
+    ]
+  );
+
   // Create transport with custom body data
   const transport = useMemo(
     () =>
@@ -76,16 +97,10 @@ export function ChatWindow() {
           currentFen,
           gameInfo,
           pgn: loadedPgn,
-          stockfishEval: {
-            score: stockfishEval.score,
-            mate: stockfishEval.mate,
-            bestMove: stockfishEval.bestMove,
-            depth: stockfishEval.depth,
-            pv: stockfishEval.pv,
-          },
+          stockfishEval: stableStockfishEval,
         },
       }),
-    [currentFen, gameInfo, loadedPgn, stockfishEval]
+    [currentFen, gameInfo, loadedPgn, stableStockfishEval]
   );
 
   // Execute a single tool call
@@ -282,35 +297,33 @@ export function ChatWindow() {
     },
   });
 
-  // Set up exercise move callback
+  // Set up exercise move callback when exercise mode becomes active
   useEffect(() => {
-    if (exerciseMode?.active) {
-      const handleExerciseMove = async (moveSan: string, isCorrect: boolean) => {
-        clearExerciseMode();
-
-        // Send hidden message to AI with the result
-        const hiddenMessage = isCorrect
-          ? `[EXERCISE_RESPONSE] User played: ${moveSan} (CORRECT - this was the expected move: ${exerciseMode.expectedMove})`
-          : `[EXERCISE_RESPONSE] User played: ${moveSan} (INCORRECT - expected: ${exerciseMode.expectedMove}). Explanation of correct move: ${exerciseMode.answerExplanation}`;
-
-        await sendMessage({ text: hiddenMessage });
-      };
-
-      setOnExerciseMove(handleExerciseMove);
-
-      return () => setOnExerciseMove(null);
+    if (!exerciseMode?.active) {
+      setOnExerciseMove(null);
+      return;
     }
-  }, [exerciseMode, clearExerciseMode, setOnExerciseMove, sendMessage]);
+
+    const handleExerciseMove = async (moveSan: string, isCorrect: boolean) => {
+      clearExerciseMode();
+
+      // Send hidden message to AI with the result
+      const hiddenMessage = isCorrect
+        ? `[EXERCISE_RESPONSE] User played: ${moveSan} (CORRECT - this was the expected move: ${exerciseMode.expectedMove})`
+        : `[EXERCISE_RESPONSE] User played: ${moveSan} (INCORRECT - expected: ${exerciseMode.expectedMove}). Explanation of correct move: ${exerciseMode.answerExplanation}`;
+
+      await sendMessage({ text: hiddenMessage });
+    };
+
+    setOnExerciseMove(handleExerciseMove);
+  }, [exerciseMode?.active, exerciseMode?.expectedMove, exerciseMode?.answerExplanation, clearExerciseMode, setOnExerciseMove, sendMessage]);
 
   const isLoading = status === "streaming" || status === "submitted";
 
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, []);
-
+  // Auto-scroll to bottom when messages change
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, scrollToBottom]);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length]); // Only depend on length to avoid scrolling on every message update
 
   // Check if there are more tool calls to execute
   const hasMoreToolCalls = currentSection < queuedToolCalls.length;
@@ -335,24 +348,26 @@ export function ChatWindow() {
     setCurrentSection(queuedToolCalls.length);
   }, [currentSection, queuedToolCalls, executeToolCall]);
 
-  // When status becomes ready (AI finished), execute first section
+  // Execute tool calls when AI finishes and we have queued calls
   useEffect(() => {
-    if (status === "ready" && queuedToolCalls.length > 0 && currentSection === 0) {
-      // Execute first section immediately (no animation for initial setup)
-      let i = 0;
-      while (i < queuedToolCalls.length) {
-        const toolCall = queuedToolCalls[i];
-        executeToolCall(toolCall, false); // animate = false for initial reveal
-
-        if (toolCall.toolName === "jumpToMove") {
-          setCurrentSection(i + 1);
-          return;
-        }
-        i++;
-      }
-      setCurrentSection(queuedToolCalls.length);
+    if (status !== "ready" || queuedToolCalls.length === 0 || currentSection !== 0) {
+      return;
     }
-  }, [status, queuedToolCalls, currentSection, executeToolCall]);
+
+    // Execute first section immediately (no animation for initial setup)
+    let i = 0;
+    while (i < queuedToolCalls.length) {
+      const toolCall = queuedToolCalls[i];
+      executeToolCall(toolCall, false); // animate = false for initial reveal
+
+      if (toolCall.toolName === "jumpToMove") {
+        setCurrentSection(i + 1);
+        return;
+      }
+      i++;
+    }
+    setCurrentSection(queuedToolCalls.length);
+  }, [status, queuedToolCalls.length, currentSection]); // Only depend on length and status
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
